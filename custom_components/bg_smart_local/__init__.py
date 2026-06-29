@@ -11,7 +11,11 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.LIGHT]
+# NOTE: Platform.SWITCH MUST be listed here. Without it Home Assistant never
+# forwards setup to switch.py, so socket entities are never created even if
+# switch.py is present in the folder. This was the cause of "no switch
+# entities appear" on BG Smart Double Socket installs.
+PLATFORMS = [Platform.LIGHT, Platform.SWITCH]
 SCAN_INTERVAL = timedelta(seconds=30)
 
 
@@ -25,16 +29,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up BG Smart Local Control from a config entry."""
     # Lazy import to avoid blocking during startup
     from .esp_local_control import ESPLocalDevice
-    
+
     host = entry.data["host"]
     port = entry.data.get("port", 8080)
     node_id = entry.data.get("node_id", "")
     pop = entry.data["pop"]
     # Always use Sec1 security for BG Smart devices
     security_type = 1
-    
+
     device = ESPLocalDevice(host, port, node_id, pop, security_type)
-    
+
     # Create coordinator for polling
     coordinator = DataUpdateCoordinator(
         hass,
@@ -43,17 +47,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         update_method=device.get_params,
         update_interval=SCAN_INTERVAL,
     )
-    
+
     # Initial refresh
     await coordinator.async_config_entry_first_refresh()
-    
+
     hass.data[DOMAIN][entry.entry_id] = {
         "device": device,
         "coordinator": coordinator,
         "host": host,
-        "port": port
+        "port": port,
     }
-    
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
@@ -61,8 +65,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    
+
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
-    
+
     return unload_ok
